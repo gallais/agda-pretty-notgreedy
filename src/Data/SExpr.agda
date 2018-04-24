@@ -11,8 +11,6 @@ data SExpr (i : Size) : Set where
   Atom : String → SExpr i
 
 open import Text.Pretty.Interface
-open import Text.Pretty.NonEmpty
-open import Agda.Builtin.Equality
 
 pretty : ∀ {ℓ} {d : Set ℓ} {{_ : Doc d}} → ∀ {i} → SExpr i → d
 pretty (Atom st) = text st

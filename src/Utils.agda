@@ -4,12 +4,16 @@ open import Data.List.Base as List
 open import Data.List.NonEmpty
 open import Data.Maybe
 open import Data.Nat.Base
+open import Data.Char.Base
 open import Data.String.Base as String
 open import Function
 open import Relation.Nullary
 
 Slength : String → ℕ
 Slength = List.length ∘′ String.toList
+
+Sreplicate : ℕ → Char → String
+Sreplicate n c = String.fromList (List.replicate n c)
 
 module _ {a} {A : Set a} where
 

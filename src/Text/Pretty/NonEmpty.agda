@@ -26,9 +26,8 @@ module layout where
   _<>_ : L → L → L
   xs <> y ∷ ys with snocView xs
   ... | xs₀ ∷ʳ′ x =
-    let n      = Slength x
-        indent = String.fromList (List.replicate n ' ')
-    in xs₀ ++⁺ (x String.++ y) ∷ List.map (indent String.++_) ys
+    let indent = Sreplicate (Slength x) ' ' in
+    xs₀ ++⁺ (x String.++ y) ∷ List.map (indent String.++_) ys
 
   flush : L → L
   flush = _⁺∷ʳ ""
