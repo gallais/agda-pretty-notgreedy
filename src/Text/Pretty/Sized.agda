@@ -28,7 +28,7 @@ module layout where
 
   infixr 5 _<>_
   _<>_ : M → M → M
-  M.height     (x <> y) = M.height y + suc (M.height x)
+  M.height     (x <> y) = M.height y + M.height x
   M.lastWidth  (x <> y) = (_+_ on M.lastWidth) x y
   M.maxWidth   (x <> y) = M.maxWidth x ⊔ (M.lastWidth x + M.maxWidth y)
   M.isMaxWidth (x <> y) = begin
@@ -36,8 +36,7 @@ module layout where
     M.lastWidth x + M.maxWidth y  ∼⟨ n≤m⊔n (M.maxWidth x) _ ⟩
     M.maxWidth x ⊔ (M.lastWidth x + M.maxWidth y) ∎
   M.lastLine   (x <> y) = replicate {n = M.lastWidth x} ' ' ++ M.lastLine y
-  M.content    (x <> y) = map {!!} (M.content y)
-                       ++ map {!!} ({!!} Vec.∷ M.content x)
+  M.content    (x <> y) = ?
 
 
   text : String → M

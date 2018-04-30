@@ -3,6 +3,7 @@ module Utils where
 open import Data.List.Base as List
 open import Data.List.NonEmpty
 open import Data.List.Properties
+open import Data.List.All as ListAll
 open import Data.Maybe
 open import Data.Nat.Base
 open import Data.Char.Base
@@ -30,11 +31,23 @@ SfromBoundedVec = String.fromList ∘ BVec.toList
 toList-++ : ∀ s t → String.toList (s String.++ t) ≡ String.toList s List.++ String.toList t
 toList-++ s t = trustMe
 
+Slength-++ : ∀ s t → Slength (s String.++ t) ≡ Slength s + Slength t
+Slength-++ s t = begin
+  Slength (s String.++ t)
+    ≡⟨ cong List.length (toList-++ s t) ⟩
+  List.length (String.toList s List.++ String.toList t)
+    ≡⟨ length-++ (String.toList s) ⟩
+  Slength s + Slength t
+    ∎
+
 Slength-replicate : ∀ n {c} → Slength (Sreplicate n c) ≡ n
 Slength-replicate n {c} = begin
   Slength (Sreplicate n c)         ≡⟨ cong List.length (toList∘fromList (List.replicate n c)) ⟩
   List.length (List.replicate n c) ≡⟨ length-replicate n ⟩
   n                                ∎
+
+[_]⁻ : ∀ {a p} {A : Set a} {P : A → Set p} (x : A) → ListAll.All P List.[ x ] → P x
+[ x ]⁻ (px ∷ []) = px
 
 module _ {a} {A : Set a} where
 

@@ -22,7 +22,7 @@ module layout where
   text : String → L
   text = NE.[_]
 
-  infixr 5 _<>_
+  infixl 4 _<>_
   _<>_ : L → L → L
   xs <> y ∷ ys with snocView xs
   ... | xs₀ ∷ʳ′ x =

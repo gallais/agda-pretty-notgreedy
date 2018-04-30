@@ -5,7 +5,7 @@ open import Data.List.Base
 open import Data.String.Base
 
 record Layout {ℓ} (d : Set ℓ) : Set ℓ where
-  infixr 5 _<>_
+  infixl 4 _<>_
   infixr 6 _$$_
   field text   : String → d
         _<>_   : d → d → d
