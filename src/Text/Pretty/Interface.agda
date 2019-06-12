@@ -2,7 +2,7 @@ module Text.Pretty.Interface where
 
 open import Data.Nat.Base
 open import Data.List.Base
-open import Data.String.Base
+open import Data.String.Base as String
 
 record Layout {ℓ} (d : Set ℓ) : Set ℓ where
   infixl 4 _<>_
@@ -13,7 +13,7 @@ record Layout {ℓ} (d : Set ℓ) : Set ℓ where
         render : d → String
 
   spaces : ℕ → d
-  spaces n = text (fromList (replicate n ' '))
+  spaces n = text (String.replicate n ' ')
 
   empty : d
   empty = spaces 0

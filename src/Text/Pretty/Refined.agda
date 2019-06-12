@@ -1,62 +1,75 @@
 module Text.Pretty.Refined where
 
-import Level as L
 open import Data.Nat.Base
 open import Data.Nat.Properties
 open import Data.Product
-open import Data.List.Base as List
-open import Data.List.All as All
-open import Data.List.All.Properties
-open import Data.List.Categorical as Cat
-open import Data.List.Properties
+open import Data.List.Base as List using (List; []; _∷_)
+open import Data.List.All as All using (All; []; _∷_)
 open import Data.String.Base as String
-open import Category.Monad
 open import Function
-open import Relation.Unary
 open import Relation.Binary.PropositionalEquality
 
-import Text.Pretty.Interface as I
 open import Data.Refinement as R
-open import Utils
 
 import Relation.Binary.PreorderReasoning
 module P = Relation.Binary.PreorderReasoning ≤-preorder
 open import Relation.Binary.PropositionalEquality
 module E = Relation.Binary.PropositionalEquality.≡-Reasoning
 
-Block : ℕ → ℕ → Set
-Block m n = [ xs ∈ List String
-            ∣ List.length xs ≡ m
-            × All ((_≤ n) ∘ Slength) xs ]
+record Sized {a} (A : Set a) : Set a where
+  field size : A → ℕ
+  ∣_∣≡_ : A → ℕ → Set
+  ∣ a ∣≡ n = size a ≡ n
+
+  ∣_∣≤_ : A → ℕ → Set
+  ∣ a ∣≤ n = size a ≤ n
+open Sized {{...}}
+
+instance
+  sized-List : ∀ {a} {A : Set a} → Sized (List A)
+  sized-List = record { size = List.length }
+
+  sized-String : Sized String
+  sized-String = record { size = String.length }
 
 record B : Set where
-  constructor mkB
-  field height     : ℕ
-        lastWidth  : ℕ
-        maxWidth   : [ n ∈ ℕ      ∣ lastWidth ≤ n         ]
-        lastLine   : [ s ∈ String ∣ Slength s ≡ lastWidth ]
-        mainBlock  : Block height (maxWidth .value)
+  field
+    height    : ℕ
+    block     : [ xs ∈ List String ∣ ∣ xs ∣≡ height ]
+  -- last line
+    lastWidth : ℕ
+    last      : [ s ∈ String ∣ ∣ s ∣≡ lastWidth ]
+  -- max of all the widths
+    maxWidth  : [ n ∈ ℕ ∣ lastWidth ≤ n × All (∣_∣≤ n) (block .value) ]
 
 module layout where
 
   module append (x y : B) where
 
     height : ℕ
-    height = B.height y + B.height x
+    height = (_+_ on B.height) y x
 
     lastWidth : ℕ
     lastWidth = (_+_ on B.lastWidth) x y
 
     vContent : List String × String
-    vContent with initLast (B.mainBlock y .value)
-    ... | []        = B.mainBlock x .value
-                    , B.lastLine x .value String.++ B.lastLine y .value
-    ... | tl ∷ʳ' hd = tl List.++ (B.lastLine x .value String.++ hd) ∷ B.mainBlock x .value
-                    , Sreplicate (B.lastWidth x) ' ' String.++ B.lastLine y .value
+    vContent with B.block y .value
+    ... | []      = B.block x .value
+                  , B.last x .value ++ B.last y .value
+    ... | hd ∷ tl = {---------------------------------------}
+                    {-|-} B.block x .value List.++      {-|-}
+                    {-|-}                  {----------------------------------------}
+                    {-|-} (B.last x .value {-|-} ++ {-|-}       hd)             {-|-}
+                    {--------------------------}    {-|-}                       {-|-}
+                  ∷ List.map (indent ++_)           {-|-}       tl           {------}
+                  , indent ++                       {-|-} B.last y .value    {-|-}
+                                                    {----------------------------}
+      where indent = replicate (B.lastWidth x) ' '
 
-    vMainBlock = proj₁ vContent
-    vLastLine  = proj₂ vContent
+    vmain = proj₁ vContent
+    vlast = proj₂ vContent
 
+{-
     .isLastLine : Slength vLastLine ≡ lastWidth
     isLastLine with initLast (B.mainBlock y .value)
     ... | []        = E.begin
@@ -80,10 +93,11 @@ module layout where
 
     lastLine : [ s ∈ String ∣ Slength s ≡ lastWidth ]
     lastLine = vLastLine , isLastLine
-
+-}
     vMaxWidth : ℕ
     vMaxWidth = B.maxWidth x .value ⊔ (B.lastWidth x + B.maxWidth y .value)
 
+{-
     .isMaxWidth : lastWidth ≤ vMaxWidth
     isMaxWidth = P.begin
         lastWidth
@@ -227,3 +241,4 @@ instance
 
   doc-Refineds : I.Doc layouts.Bs
   doc-Refineds = record { doc }
+-}

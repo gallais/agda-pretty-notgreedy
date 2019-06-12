@@ -8,6 +8,7 @@ open import Data.Maybe
 open import Data.Nat.Base
 open import Data.Char.Base
 open import Data.String.Base as String
+open import Data.String.Unsafe
 open import Data.Vec as Vec
 open import Data.BoundedVec as BVec using (BoundedVec)
 open import Function

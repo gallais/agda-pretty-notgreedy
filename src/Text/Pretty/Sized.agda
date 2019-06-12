@@ -36,7 +36,7 @@ module layout where
     M.lastWidth x + M.maxWidth y  ∼⟨ n≤m⊔n (M.maxWidth x) _ ⟩
     M.maxWidth x ⊔ (M.lastWidth x + M.maxWidth y) ∎
   M.lastLine   (x <> y) = replicate {n = M.lastWidth x} ' ' ++ M.lastLine y
-  M.content    (x <> y) = ?
+  M.content    (x <> y) = {!!}
 
 
   text : String → M
