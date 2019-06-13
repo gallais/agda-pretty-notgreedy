@@ -1,10 +1,13 @@
 module Text.Pretty.Refined where
 
+import Level
 open import Data.Nat.Base
 open import Data.Nat.Properties
 open import Data.Product
-open import Data.List.Base as List using (List; []; _∷_)
-open import Data.List.All as All using (All; []; _∷_)
+open import Data.Tree.Binary as Tree
+open import Data.Maybe.Base
+import Data.List.Relation.Unary.All
+import Data.Maybe.Relation.Unary.All
 open import Data.String.Base as String
 open import Function
 open import Relation.Binary.PropositionalEquality
@@ -25,22 +28,50 @@ record Sized {a} (A : Set a) : Set a where
   ∣ a ∣≤ n = size a ≤ n
 open Sized {{...}}
 
+record All (FA : Set) (A : Set) : Set₁ where
+  field allOf : (A → Set) → (FA → Set)
+
+  All≡ : {{s : Sized A}} → ℕ → FA → Set
+  All≡ n = allOf (∣_∣≡ n)
+
+  All≤ : {{s : Sized A}} → ℕ → FA → Set
+  All≤ n = allOf (∣_∣≤ n)
+open All {{...}}
+
 instance
-  sized-List : ∀ {a} {A : Set a} → Sized (List A)
-  sized-List = record { size = List.length }
+  all-Maybe : ∀ {A} → All (Maybe A) A
+  all-Maybe = record { allOf = Data.Maybe.Relation.Unary.All.All }
+
+  all-List : ∀ {A} → All (Tree A) A
+  all-List = record { allOf = {!!} }
+
+  all-Pair : ∀ {L R A} {{_ : All L A}} {{_ : All R A}} → All (L × R) A
+  all-Pair = {!!}
+
+  all-Refine : ∀ {F A P} {{_ : All F A}} → All (Refine F P) A
+  all-Refine = record { allOf = λ P → allOf P ∘′ value }
+
+instance
 
   sized-String : Sized String
   sized-String = record { size = String.length }
 
+Block : Set
+Block = Maybe (String × Tree String)
+
 record B : Set where
   field
     height    : ℕ
-    block     : [ xs ∈ List String ∣ ∣ xs ∣≡ height ]
+    block     : [ xs ∈ Block ∣ {!!} ] -- ∣ xs ∣≡ height ]
   -- last line
     lastWidth : ℕ
     last      : [ s ∈ String ∣ ∣ s ∣≡ lastWidth ]
   -- max of all the widths
-    maxWidth  : [ n ∈ ℕ ∣ lastWidth ≤ n × All (∣_∣≤ n) (block .value) ]
+    maxWidth  : [ n ∈ ℕ ∣ lastWidth ≤ n × All≤ n block ]
+
+the-block : Block → String → Tree String → Block
+the-block (just (x , xs)) y ys = just (x , node xs y ys)
+the-block nothing         y ys = just (y , ys)
 
 module layout where
 
@@ -52,18 +83,19 @@ module layout where
     lastWidth : ℕ
     lastWidth = (_+_ on B.lastWidth) x y
 
-    vContent : List String × String
+    vContent : Maybe (String × Tree String) × String
     vContent with B.block y .value
-    ... | []      = B.block x .value
-                  , B.last x .value ++ B.last y .value
-    ... | hd ∷ tl = {---------------------------------------}
-                    {-|-} B.block x .value List.++      {-|-}
-                    {-|-}                  {----------------------------------------}
-                    {-|-} (B.last x .value {-|-} ++ {-|-}       hd)             {-|-}
-                    {--------------------------}    {-|-}                       {-|-}
-                  ∷ List.map (indent ++_)           {-|-}       tl           {------}
-                  , indent ++                       {-|-} B.last y .value    {-|-}
-                                                    {----------------------------}
+    ... | nothing        = B.block x .value
+                         , B.last x .value ++ B.last y .value
+    ... | just (hd , tl) = the-block
+      {---------------------------------------}
+      {-|-} (B.block x .value)            {-|-}
+      {-|-}                  {----------------------------------------}
+      {-|-} (B.last x .value {-|-} ++ {-|-}       hd)             {-|-}
+      {--------------------------}    {-|-}                       {-|-}
+      (Tree.map (indent ++_)          {-|-}       tl)          {------}
+      , indent ++                     {-|-} B.last y .value    {-|-}
+                                      {----------------------------}
       where indent = replicate (B.lastWidth x) ' '
 
     vmain = proj₁ vContent
