@@ -1,21 +1,28 @@
 {-# OPTIONS --irrelevant-projections #-}
+
 module Text.Pretty.Refined where
 
 import Level
+
+open import Data.List.Base using (List; []; _∷_)
 open import Data.Nat.Base
 open import Data.Nat.Properties
-open import Data.Product
+open import Data.Product as Product using (_×_; _,_; uncurry; proj₁; proj₂)
+
 open import Data.Tree.Binary as Tree using (Tree; leaf; node)
-open import Data.Maybe.Base
-import Data.Maybe.Relation.Unary.All as Maybe
-import Data.List.Relation.Unary.All
-import Data.Maybe.Relation.Unary.All
+open import Data.Tree.Binary.Relation.Unary.All as TreeAll using (leaf; node)
+import Data.Tree.Binary.Properties as Treeₚ
+
+open import Data.Maybe.Base as Maybe using (Maybe; nothing; just; maybe′)
+open import Data.Maybe.Relation.Unary.All as MaybeAll using (nothing; just)
+
 open import Data.String.Base as String
 open import Data.String.Unsafe
 open import Function
+open import Relation.Unary using (IUniversal; _⇒_)
 open import Relation.Binary.PropositionalEquality
 
-open import Data.Refinement as R
+open import Data.Refinement hiding (map)
 open import Utils
 
 record Sized {a} (A : Set a) : Set a where
@@ -44,10 +51,10 @@ open Block
 
 instance
   all-Maybe : ∀ {FA A} → {{_ : All FA A}} → All (Maybe FA) A
-  all-Maybe = record { allOf = Maybe.All ∘′ allOf }
+  all-Maybe = record { allOf = MaybeAll.All ∘′ allOf }
 
   all-Tree : ∀ {A} → All (Tree A) A
-  all-Tree = record { allOf = Tree.All }
+  all-Tree = record { allOf = TreeAll.All }
 
   all-Pair : ∀ {L R A} {{_ : All L A}} {{_ : All R A}} → All (L × R) A
   all-Pair = record { allOf = λ P → uncurry λ L R → allOf P L × allOf P R }
@@ -90,6 +97,17 @@ the-block [ nothing       ] y ys = [ just (y , ys) ]
 ∣the-block∣ [ just (x , xs) ] y ys = refl
 ∣the-block∣ [ nothing       ] y ys = refl
 
+≤-Block : ∀ {m n} {b : Block} → m ≤ n → All≤ m b → All≤ n b
+≤-Block {m} {n} m≤n = MaybeAll.map (Product.map step (TreeAll.map step)) where
+
+  step : ∀ {p} → p ≤ m → p ≤ n
+  step = flip ≤-trans m≤n
+
+All≤-the-block : ∀ {l m r n} →
+  All≤ n l → All≤ n m → All≤ n r → All≤ n (the-block l m r)
+All≤-the-block nothing           py pys = just (py , pys)
+All≤-the-block (just (px , pxs)) py pys = just (px , node pxs py pys)
+
 module layout where
 
   module append (x y : B) where
@@ -99,6 +117,9 @@ module layout where
 
     lastWidth : ℕ
     lastWidth = (_+_ on B.lastWidth) x y
+
+    indent : String
+    indent = replicate (B.lastWidth x) ' '
 
     vContent : Block × String
     vContent with B.block y .value .content
@@ -113,14 +134,13 @@ module layout where
       (Tree.map (indent ++_)          {-|-}       tl)          {------}
       , indent ++                     {-|-} B.last y .value    {-|-}
                                       {----------------------------}
-      where indent = replicate (B.lastWidth x) ' '
 
-    vblock = proj₁ vContent
-    vlast  = proj₂ vContent
+    vBlock = proj₁ vContent
+    vLast  = proj₂ vContent
 
     isBlock : ∣ B.block x .value ∣≡ B.height x →
               ∣ B.block y .value ∣≡ B.height y →
-              ∣ vblock ∣≡ height
+              ∣ vBlock ∣≡ height
     isBlock ∣x∣ ∣y∣ with B.block y .value
     ... | [ nothing ]        = begin
       size (B.block x .value) ≡⟨ ∣x∣ ⟩
@@ -135,18 +155,17 @@ module layout where
 
       open ≡-Reasoning
       block  = B.block x .value
-      indent = replicate (B.lastWidth x) ' '
       middle = B.last x .value ++ hd
       rest   = Tree.map (indent ++_) tl
-      ∣rest∣ = Tree.size-map (indent ++_) tl
+      ∣rest∣ = Treeₚ.size-map (indent ++_) tl
 
     block : [ xs ∈ Block ∣ ∣ xs ∣≡ height ]
-    block .value = vblock
+    block .value = vBlock
     block .proof = isBlock (B.block x .proof) (B.block y .proof)
 
     isLastLine : ∣ B.last x .value ∣≡ B.lastWidth x →
                  ∣ B.last y .value ∣≡ B.lastWidth y →
-                 ∣ vlast ∣≡ lastWidth
+                 ∣ vLast ∣≡ lastWidth
     isLastLine ∣x∣ ∣y∣ with B.block y .value
     ... | [ nothing ]        = begin
       length (B.last x .value ++ B.last y .value)         ≡⟨ length-++ (B.last x .value) (B.last y .value) ⟩
@@ -158,89 +177,120 @@ module layout where
       B.lastWidth x + B.lastWidth y            ∎ where
 
       open ≡-Reasoning
-      indent = replicate (B.lastWidth x) ' '
 
     last : [ s ∈ String ∣ ∣ s ∣≡ lastWidth ]
-    last .value = vlast
+    last .value = vLast
     last .proof = isLastLine (B.last x .proof) (B.last y .proof)
 
     vMaxWidth : ℕ
-    vMaxWidth = B.maxWidth x .value ⊔ (B.lastWidth x + B.maxWidth y .value)
+    vMaxWidth = B.maxWidth x .value
+              ⊔ (B.lastWidth x + B.maxWidth y .value)
 
-{-
-    .isMaxWidth : lastWidth ≤ vMaxWidth
-    isMaxWidth = P.begin
-        lastWidth
-          P.∼⟨ +-monoʳ-≤ (B.lastWidth x) (B.maxWidth y .proof) ⟩
-        B.lastWidth x + B.maxWidth y .value
-          P.∼⟨ n≤m⊔n (B.maxWidth x .value) _ ⟩
-        B.maxWidth x .value ⊔ (B.lastWidth x + B.maxWidth y .value)
-          P.∎
+    isMaxWidth₁ : B.lastWidth y ≤ B.maxWidth y .value →
+                  lastWidth ≤ vMaxWidth
+    isMaxWidth₁ ∣y∣ = begin
+      lastWidth                           ≤⟨ +-monoʳ-≤ (B.lastWidth x) ∣y∣ ⟩
+      B.lastWidth x + B.maxWidth y .value ≤⟨ n≤m⊔n _ _ ⟩
+      vMaxWidth                           ∎ where open ≤-Reasoning
 
-    maxWidth : [ n ∈ ℕ ∣ lastWidth ≤ n ]
-    maxWidth = vMaxWidth , isMaxWidth
+    isMaxWidth₂ : ∣ B.last x .value ∣≡ B.lastWidth x →
+                  B.lastWidth x ≤ B.maxWidth x .value →
+                  All≤ (B.maxWidth x .value) (B.block x .value) →
+                  All≤ (B.maxWidth y .value) (B.block y .value) →
+                  All≤ vMaxWidth vBlock
+    isMaxWidth₂ ∣x∣≡ ∣x∣≤ ∣xs∣ ∣ys∣ with B.block y .value
+    ... | [ nothing ]        = ≤-Block (m≤m⊔n _ _) ∣xs∣
+    isMaxWidth₂ ∣x∣≡ ∣x∣≤ ∣xs∣ (just (∣hd∣ , ∣tl∣)) | [ just (hd , tl) ] =
+      All≤-the-block (≤-Block (m≤m⊔n _ _) ∣xs∣)
+                     middle
+                     (TreeAll.map⁺ (indent ++_) (TreeAll.map (indented _) ∣tl∣))
 
-    .isMainBlock₂ : All ((_≤ vMaxWidth) ∘ Slength) vMainBlock
-    isMainBlock₂ with initLast (B.mainBlock y .value)
-    ... | []        = All.map (flip ≤-trans (m≤m⊔n _ _)) (proj₂ (B.mainBlock x .proof))
-    ... | tl ∷ʳ' hd = ++⁺ (All.map (λ {s} → pry {s}) (++⁻ˡ tl (proj₂ (B.mainBlock y .proof))))
-                    $ prm
-                    ∷ All.map (flip ≤-trans (m≤m⊔n _ _)) (proj₂ (B.mainBlock x .proof)) where
+      where
 
-      .pry : (_≤ B.maxWidth y .value) ∘ Slength ⊆ (_≤ vMaxWidth) ∘ Slength
-      pry {s} p = P.begin
-        Slength s                           P.∼⟨ p ⟩
-        B.maxWidth y .value                 P.∼⟨ n≤m+n (B.lastWidth x) _ ⟩
-        B.lastWidth x + B.maxWidth y .value P.∼⟨ n≤m⊔n (B.maxWidth x .value) _ ⟩
-        vMaxWidth                           P.∎
+      middle : ∣ B.last x .value ++ hd ∣≤ vMaxWidth
+      middle = begin
+        length (B.last x .value ++ hd)       ≡⟨ length-++ (B.last x .value) hd ⟩
+        length (B.last x .value) + length hd ≡⟨ cong (_+ _) ∣x∣≡ ⟩
+        B.lastWidth x + length hd            ≤⟨ +-monoʳ-≤ (B.lastWidth x) ∣hd∣ ⟩
+        B.lastWidth x + B.maxWidth y .value  ≤⟨ n≤m⊔n _ _ ⟩
+        vMaxWidth ∎ where open ≤-Reasoning
 
-      .prm : Slength (B.lastLine x .value String.++ hd) ≤ vMaxWidth
-      prm = P.begin
-        Slength (B.lastLine x .value String.++ hd)
-          P.≈⟨ Slength-++ (B.lastLine x .value) hd ⟩
-        Slength (B.lastLine x .value) + Slength hd
-          P.≈⟨ cong (_+ _) (B.lastLine x .proof) ⟩
-        B.lastWidth x + Slength hd
-          P.∼⟨ +-monoʳ-≤ (B.lastWidth x) ([ hd ]⁻ (++⁻ʳ tl (proj₂ (B.mainBlock y .proof)))) ⟩
-        B.lastWidth x + B.maxWidth y .value
-          P.∼⟨ n≤m⊔n (B.maxWidth x .value) _ ⟩
-        vMaxWidth P.∎
+      indented : ∀ s → ∣ s ∣≤ B.maxWidth y .value → ∣ indent ++ s ∣≤ vMaxWidth
+      indented s ∣s∣ = begin
+        size (indent ++ s)                  ≡⟨ length-++ indent s ⟩
+        length indent + length s            ≡⟨ cong (_+ _) (length-replicate (B.lastWidth x)) ⟩
+        B.lastWidth x + length s            ≤⟨ +-monoʳ-≤ (B.lastWidth x) ∣s∣ ⟩
+        B.lastWidth x + B.maxWidth y .value ≤⟨ n≤m⊔n (B.maxWidth x .value) _ ⟩
+        vMaxWidth                           ∎ where open ≤-Reasoning
 
-    mainBlock : Block height vMaxWidth
-    mainBlock = vMainBlock , (isMainBlock₁ , isMainBlock₂)
+    maxWidth : [ n ∈ ℕ ∣ lastWidth ≤ n × All≤ n block ]
+    maxWidth .value = vMaxWidth
+    maxWidth .proof = isMaxWidth₁ (B.maxWidth y .proof .proj₁)
+                    , isMaxWidth₂ (B.last x .proof) (B.maxWidth x .proof .proj₁)
+                                  (B.maxWidth x .proof .proj₂) (B.maxWidth y .proof .proj₂)
 
   infixl 4 _<>_
   _<>_ : B → B → B
   x <> y = record { append x y }
 
   text : String → B
-  text s = mkB 0 (Slength s) (Slength s , ≤-refl) (s , refl) ([] , refl , [])
+  text s = record
+    { height    = 0
+    ; block     = [ nothing ] , refl
+    ; lastWidth = width
+    ; last      = s , refl
+    ; maxWidth  = width , ≤-refl , nothing
+    } where width = length s
+
+  dot   = text "."
+  comma = text ","
+
+  module flush (x : B) where
+
+    height    = suc (B.height x)
+    lastWidth = 0
+    vMaxWidth = B.maxWidth x .value
+
+    last : [ s ∈ String ∣ ∣ s ∣≡ lastWidth ]
+    last = "" , refl
+
+    vBlock = the-block (B.block x .value) (B.last x .value) leaf
+
+    isBlock : ∣ B.block x .value ∣≡ B.height x → ∣ vBlock ∣≡  height
+    isBlock ∣x∣ = begin
+      size vBlock                 ≡⟨ ∣the-block∣ (B.block x .value) (B.last x .value) leaf ⟩
+      size (B.block x .value) + 1 ≡⟨ cong (_+ 1) ∣x∣ ⟩
+      B.height x + 1              ≡⟨ +-comm (B.height x) 1 ⟩
+      height                      ∎ where open ≡-Reasoning
+
+    block : [ xs ∈ Block ∣ ∣ xs ∣≡ height ]
+    block .value = vBlock
+    block .proof = isBlock (B.block x .proof)
+
+    maxWidth : [ n ∈ ℕ ∣ lastWidth ≤ n × All≤ n block ]
+    maxWidth .value = B.maxWidth x .value
+    maxWidth .proof = z≤n , All≤-the-block (B.maxWidth x .proof .proj₂) middle leaf where
+
+      middle : ∣ B.last x .value ∣≤ vMaxWidth
+      middle = begin
+        length (B.last x .value) ≡⟨ B.last x .proof ⟩
+        x .B.lastWidth           ≤⟨ B.maxWidth x .proof .proj₁ ⟩
+        vMaxWidth                ∎ where open ≤-Reasoning
 
   flush : B → B
-  B.height    (flush x) = suc (B.height x)
-  B.lastWidth (flush x) = 0
-  B.maxWidth  (flush x) = refine (λ _ → z≤n) (B.maxWidth x)
-  B.lastLine  (flush x) = "" , refl
-  B.mainBlock (flush x) = (B.lastLine x .value ∷ B.mainBlock x .value)
-                        , cong suc (proj₁ (B.mainBlock x .proof))
-                        , (prf ∷ proj₂ (B.mainBlock x .proof)) where
-
-    .prf : Slength (B.lastLine x .value) ≤ B.maxWidth x .value
-    prf = P.begin
-      Slength (B.lastLine x .value) P.≈⟨ B.lastLine x .proof ⟩
-      x .B.lastWidth                P.∼⟨ B.maxWidth x .proof ⟩
-      B.maxWidth x .value           P.∎
+  flush x = record { flush x }
 
   render : B → String
-  render x = unlines $ List.reverse
-           $ B.lastLine x .value
-           ∷ B.mainBlock x .value
+  render x = unlines
+    $ maybe′ (uncurry (λ hd tl → hd ∷ Tree.toList tl)) [] ∘′ content
+    $ the-block (B.block x .value) (B.last x .value) leaf
 
+
+{-
 instance
 
   layout-Refined : I.Layout B
   layout-Refined = record { layout }
-
 
 module layouts where
 

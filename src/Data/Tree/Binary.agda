@@ -11,10 +11,9 @@ open import Relation.Binary.PropositionalEquality
 
 private
   variable
-    a b p : Level
+    a b : Level
     A : Set a
     B : Set b
-    P : A → Set p
 
 data Tree (A : Set a) : Set a where
   leaf : Tree A
@@ -34,11 +33,3 @@ toDiffList (node l m r) = toDiffList l ++ m ∷ toDiffList r
 
 toList : Tree A → List A
 toList = DiffList.toList ∘′ toDiffList
-
-data All {A : Set a} (P : A → Set p) : Tree A → Set (a ⊔ p) where
-  leaf : All P leaf
-  node : ∀ {l m r} → All P l → P m → All P r → All P (node l m r)
-
-size-map : ∀ (f : A → B) t → size (map f t) ≡ size t
-size-map f leaf         = refl
-size-map f (node l m r) = cong₂ (λ l r → l + suc r) (size-map f l) (size-map f r)
