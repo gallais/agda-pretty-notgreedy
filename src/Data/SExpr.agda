@@ -2,7 +2,7 @@ module Data.SExpr where
 
 open import Size
 open import Data.Unit
-open import Data.List.Base
+open import Data.List.Base as List
 open import Data.String.Base
 open import Function
 
@@ -24,7 +24,7 @@ module Test where
   abcd = Node $ map Atom $ "a" ∷ "b" ∷ "c" ∷ "d" ∷ []
 
   abcd₄ : SExpr ∞
-  abcd₄ = Node $ replicate 4 abcd
+  abcd₄ = Node $ List.replicate 4 abcd
 
   testData : SExpr ∞
   testData = Node

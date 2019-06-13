@@ -25,6 +25,8 @@ open import Relation.Binary.PropositionalEquality
 open import Data.Refinement hiding (map)
 open import Utils
 
+import Text.Pretty.Interface as I
+
 record Sized {a} (A : Set a) : Set a where
   field size : A → ℕ
   ∣_∣≡_ : A → ℕ → Set
@@ -283,7 +285,6 @@ module layout where
     $ the-block (B.block x .value) (B.last x .value) leaf
 
 
-{-
 instance
 
   layout-Refined : I.Layout B
@@ -293,9 +294,12 @@ module layouts where
 
   Bs = List B
 
+  open import Category.Monad
+  open import Data.List.Base
+  import Data.List.Categorical as Cat
   open import Data.Bool
   open import Agda.Builtin.Nat renaming (_<_ to _<?ᵇ_)
-  open RawMonad (Cat.monad {L.zero})
+  open RawMonad (Cat.monad {Level.zero})
   open import Data.Maybe.Base
   import Data.List.NonEmpty as NE
 
@@ -313,7 +317,7 @@ module layouts where
   flush = I.flush <$>_
 
   mostFrugal : Bs → B
-  mostFrugal = maybe (NE.foldr₁ (minBy B.height)) I.empty
+  mostFrugal = maybe (NE.foldr₁ (minBy B.height) ∘′ uncurry NE._∷_) I.empty
              ∘′ uncons
 
   render : Bs → String
@@ -328,6 +332,7 @@ instance
 module doc where
 
   open layouts
+  open import Data.List.Base as List
 
   _<|>_ : Bs → Bs → Bs
   x <|> y = x List.++ y
@@ -339,4 +344,3 @@ instance
 
   doc-Refineds : I.Doc layouts.Bs
   doc-Refineds = record { doc }
--}
