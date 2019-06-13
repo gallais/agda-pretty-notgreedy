@@ -1,5 +1,4 @@
 {-# OPTIONS --irrelevant-projections #-}
-
 module Text.Pretty.Refined where
 
 import Level
@@ -142,7 +141,8 @@ module layout where
       ∣rest∣ = Tree.size-map (indent ++_) tl
 
     block : [ xs ∈ Block ∣ ∣ xs ∣≡ height ]
-    block = vblock , isBlock (B.block x .proof) (B.block y .proof)
+    block .value = vblock
+    block .proof = isBlock (B.block x .proof) (B.block y .proof)
 
     isLastLine : ∣ B.last x .value ∣≡ B.lastWidth x →
                  ∣ B.last y .value ∣≡ B.lastWidth y →
@@ -161,7 +161,8 @@ module layout where
       indent = replicate (B.lastWidth x) ' '
 
     last : [ s ∈ String ∣ ∣ s ∣≡ lastWidth ]
-    last = vlast , isLastLine (B.last x .proof) (B.last y .proof)
+    last .value = vlast
+    last .proof = isLastLine (B.last x .proof) (B.last y .proof)
 
     vMaxWidth : ℕ
     vMaxWidth = B.maxWidth x .value ⊔ (B.lastWidth x + B.maxWidth y .value)
