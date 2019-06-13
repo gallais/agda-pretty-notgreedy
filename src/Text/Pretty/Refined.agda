@@ -4,8 +4,9 @@ import Level
 open import Data.Nat.Base
 open import Data.Nat.Properties
 open import Data.Product
-open import Data.Tree.Binary as Tree
+open import Data.Tree.Binary as Tree using (Tree; leaf; node)
 open import Data.Maybe.Base
+import Data.Maybe.Relation.Unary.All as Maybe
 import Data.List.Relation.Unary.All
 import Data.Maybe.Relation.Unary.All
 open import Data.String.Base as String
@@ -38,31 +39,42 @@ record All (FA : Set) (A : Set) : Set₁ where
   All≤ n = allOf (∣_∣≤ n)
 open All {{...}}
 
-instance
-  all-Maybe : ∀ {A} → All (Maybe A) A
-  all-Maybe = record { allOf = Data.Maybe.Relation.Unary.All.All }
+record Block : Set where
+  constructor [_]
+  field content : Maybe (String × Tree String)
+open Block
 
-  all-List : ∀ {A} → All (Tree A) A
-  all-List = record { allOf = {!!} }
+instance
+  all-Maybe : ∀ {FA A} → {{_ : All FA A}} → All (Maybe FA) A
+  all-Maybe = record { allOf = Maybe.All ∘′ allOf }
+
+  all-Tree : ∀ {A} → All (Tree A) A
+  all-Tree = record { allOf = Tree.All }
 
   all-Pair : ∀ {L R A} {{_ : All L A}} {{_ : All R A}} → All (L × R) A
-  all-Pair = {!!}
+  all-Pair = record { allOf = λ P → uncurry λ L R → allOf P L × allOf P R }
 
-  all-Refine : ∀ {F A P} {{_ : All F A}} → All (Refine F P) A
+  all-Refine : ∀ {FA A P} {{_ : All FA A}} → All (Refine FA P) A
   all-Refine = record { allOf = λ P → allOf P ∘′ value }
+
+  all-Refl : All String String
+  all-Refl = record { allOf = id }
+
+  all-Block : All Block String
+  all-Block = record { allOf = λ P → allOf P ∘′ content }
 
 instance
 
   sized-String : Sized String
   sized-String = record { size = String.length }
 
-Block : Set
-Block = Maybe (String × Tree String)
+  sized-Block : Sized Block
+  sized-Block = record { size = maybe′ (suc ∘ Tree.size ∘ proj₂) 0 ∘ content }
 
 record B : Set where
   field
     height    : ℕ
-    block     : [ xs ∈ Block ∣ {!!} ] -- ∣ xs ∣≡ height ]
+    block     : [ xs ∈ Block ∣ ∣ xs ∣≡ height ]
   -- last line
     lastWidth : ℕ
     last      : [ s ∈ String ∣ ∣ s ∣≡ lastWidth ]
@@ -70,8 +82,8 @@ record B : Set where
     maxWidth  : [ n ∈ ℕ ∣ lastWidth ≤ n × All≤ n block ]
 
 the-block : Block → String → Tree String → Block
-the-block (just (x , xs)) y ys = just (x , node xs y ys)
-the-block nothing         y ys = just (y , ys)
+the-block [ just (x , xs) ] y ys = [ just (x , node xs y ys) ]
+the-block [ nothing       ] y ys = [ just (y , ys) ]
 
 module layout where
 
@@ -83,8 +95,8 @@ module layout where
     lastWidth : ℕ
     lastWidth = (_+_ on B.lastWidth) x y
 
-    vContent : Maybe (String × Tree String) × String
-    vContent with B.block y .value
+    vContent : Block × String
+    vContent with B.block y .value .content
     ... | nothing        = B.block x .value
                          , B.last x .value ++ B.last y .value
     ... | just (hd , tl) = the-block
