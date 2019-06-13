@@ -1,3 +1,5 @@
+{-# OPTIONS --irrelevant-projections #-}
+
 module Text.Pretty.Refined where
 
 import Level
@@ -10,15 +12,12 @@ import Data.Maybe.Relation.Unary.All as Maybe
 import Data.List.Relation.Unary.All
 import Data.Maybe.Relation.Unary.All
 open import Data.String.Base as String
+open import Data.String.Unsafe
 open import Function
 open import Relation.Binary.PropositionalEquality
 
 open import Data.Refinement as R
-
-import Relation.Binary.PreorderReasoning
-module P = Relation.Binary.PreorderReasoning ≤-preorder
-open import Relation.Binary.PropositionalEquality
-module E = Relation.Binary.PropositionalEquality.≡-Reasoning
+open import Utils
 
 record Sized {a} (A : Set a) : Set a where
   field size : A → ℕ
@@ -68,8 +67,11 @@ instance
   sized-String : Sized String
   sized-String = record { size = String.length }
 
+  sized-Tree : ∀ {a} {A : Set a} → Sized (Tree A)
+  sized-Tree = record { size = Tree.size }
+
   sized-Block : Sized Block
-  sized-Block = record { size = maybe′ (suc ∘ Tree.size ∘ proj₂) 0 ∘ content }
+  sized-Block = record { size = maybe′ (suc ∘ size ∘ proj₂) 0 ∘ content }
 
 record B : Set where
   field
@@ -85,12 +87,16 @@ the-block : Block → String → Tree String → Block
 the-block [ just (x , xs) ] y ys = [ just (x , node xs y ys) ]
 the-block [ nothing       ] y ys = [ just (y , ys) ]
 
+∣the-block∣ : ∀ b y ys → size (the-block b y ys) ≡ size b + suc (size ys)
+∣the-block∣ [ just (x , xs) ] y ys = refl
+∣the-block∣ [ nothing       ] y ys = refl
+
 module layout where
 
   module append (x y : B) where
 
     height : ℕ
-    height = (_+_ on B.height) y x
+    height = (_+_ on B.height) x y
 
     lastWidth : ℕ
     lastWidth = (_+_ on B.lastWidth) x y
@@ -110,34 +116,53 @@ module layout where
                                       {----------------------------}
       where indent = replicate (B.lastWidth x) ' '
 
-    vmain = proj₁ vContent
-    vlast = proj₂ vContent
+    vblock = proj₁ vContent
+    vlast  = proj₂ vContent
 
-{-
-    .isLastLine : Slength vLastLine ≡ lastWidth
-    isLastLine with initLast (B.mainBlock y .value)
-    ... | []        = E.begin
-      Slength (B.lastLine x .value String.++ B.lastLine y .value)
-        E.≡⟨ cong length (toList-++ (B.lastLine x .value) (B.lastLine y .value)) ⟩
-      length (toList (B.lastLine x .value) List.++ toList (B.lastLine y .value))
-        E.≡⟨ length-++ (toList (B.lastLine x .value)) ⟩
-      length (toList (B.lastLine x .value)) + length (toList (B.lastLine y .value))
-        E.≡⟨ cong₂ _+_ (B.lastLine x .proof) (B.lastLine y .proof) ⟩
-      x .B.lastWidth + y .B.lastWidth
-        E.∎
-    ... | tl ∷ʳ' hd = E.begin
-      Slength (Sreplicate (B.lastWidth x) ' ' String.++ B.lastLine y .value)
-        E.≡⟨ cong length (toList-++ (Sreplicate (B.lastWidth x) ' ') (B.lastLine y .value)) ⟩
-      length (toList (Sreplicate (B.lastWidth x) ' ') List.++ toList (B.lastLine y .value))
-        E.≡⟨ length-++ (toList (Sreplicate (B.lastWidth x) ' ')) ⟩
-      length (toList (Sreplicate (B.lastWidth x) ' ')) + length (toList (B.lastLine y .value))
-        E.≡⟨ cong₂ _+_ (Slength-replicate (B.lastWidth x)) (B.lastLine y .proof) ⟩
-      B.lastWidth x + y .B.lastWidth
-        E.∎
+    isBlock : ∣ B.block x .value ∣≡ B.height x →
+              ∣ B.block y .value ∣≡ B.height y →
+              ∣ vblock ∣≡ height
+    isBlock ∣x∣ ∣y∣ with B.block y .value
+    ... | [ nothing ]        = begin
+      size (B.block x .value) ≡⟨ ∣x∣ ⟩
+      B.height x              ≡˘⟨ +-identityʳ (B.height x) ⟩
+      B.height x + 0          ≡⟨ cong (_ +_) ∣y∣ ⟩
+      B.height x + B.height y ∎ where open ≡-Reasoning
+    ... | [ just (hd , tl) ] = begin
+      size (the-block block middle rest) ≡⟨ ∣the-block∣ block middle rest ⟩
+      size block + suc (size rest)       ≡⟨ cong ((size block +_) ∘′ suc) ∣rest∣ ⟩
+      size block + suc (size tl)         ≡⟨ cong₂ _+_ ∣x∣ ∣y∣ ⟩
+      B.height x + B.height y ∎  where
 
-    lastLine : [ s ∈ String ∣ Slength s ≡ lastWidth ]
-    lastLine = vLastLine , isLastLine
--}
+      open ≡-Reasoning
+      block  = B.block x .value
+      indent = replicate (B.lastWidth x) ' '
+      middle = B.last x .value ++ hd
+      rest   = Tree.map (indent ++_) tl
+      ∣rest∣ = Tree.size-map (indent ++_) tl
+
+    block : [ xs ∈ Block ∣ ∣ xs ∣≡ height ]
+    block = vblock , isBlock (B.block x .proof) (B.block y .proof)
+
+    isLastLine : ∣ B.last x .value ∣≡ B.lastWidth x →
+                 ∣ B.last y .value ∣≡ B.lastWidth y →
+                 ∣ vlast ∣≡ lastWidth
+    isLastLine ∣x∣ ∣y∣ with B.block y .value
+    ... | [ nothing ]        = begin
+      length (B.last x .value ++ B.last y .value)         ≡⟨ length-++ (B.last x .value) (B.last y .value) ⟩
+      length (B.last x .value) + length (B.last y .value) ≡⟨ cong₂ _+_ ∣x∣ ∣y∣ ⟩
+      B.lastWidth x + B.lastWidth y ∎ where open ≡-Reasoning
+    ... | [ just (hd , tl) ] = begin
+      length (indent ++ B.last y .value)       ≡⟨ length-++ indent (B.last y .value) ⟩
+      length indent + length (B.last y .value) ≡⟨ cong₂ _+_ (length-replicate (B.lastWidth x)) ∣y∣ ⟩
+      B.lastWidth x + B.lastWidth y            ∎ where
+
+      open ≡-Reasoning
+      indent = replicate (B.lastWidth x) ' '
+
+    last : [ s ∈ String ∣ ∣ s ∣≡ lastWidth ]
+    last = vlast , isLastLine (B.last x .proof) (B.last y .proof)
+
     vMaxWidth : ℕ
     vMaxWidth = B.maxWidth x .value ⊔ (B.lastWidth x + B.maxWidth y .value)
 
@@ -153,25 +178,6 @@ module layout where
 
     maxWidth : [ n ∈ ℕ ∣ lastWidth ≤ n ]
     maxWidth = vMaxWidth , isMaxWidth
-
-    .isMainBlock₁ : List.length vMainBlock ≡ height
-    isMainBlock₁ with initLast (B.mainBlock y .value)
-    ... | []        = E.begin
-      length (B.mainBlock x .value)
-        E.≡⟨ cong₂ _+_ (proj₁ (B.mainBlock y .proof)) (proj₁ (B.mainBlock x .proof)) ⟩
-      B.height y + B.height x
-        E.∎
-    ... | tl ∷ʳ' hd = E.begin
-      length (tl List.++ _ ∷ B.mainBlock x .value)
-        E.≡⟨ length-++ tl ⟩
-      length tl + (1 + length (B.mainBlock x .value))
-        E.≡⟨ sym (+-assoc (length tl) 1 _) ⟩
-      length tl + 1 + length (B.mainBlock x .value)
-        E.≡⟨ cong (_+ _) (sym (length-++ tl {List.[ hd ]})) ⟩
-      length (tl ∷ʳ hd) + length (B.mainBlock x .value)
-        E.≡⟨ cong₂ _+_ (proj₁ (B.mainBlock y .proof)) (proj₁ (B.mainBlock x .proof)) ⟩
-      B.height y + B.height x
-        E.∎
 
     .isMainBlock₂ : All ((_≤ vMaxWidth) ∘ Slength) vMainBlock
     isMainBlock₂ with initLast (B.mainBlock y .value)

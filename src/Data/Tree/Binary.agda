@@ -7,6 +7,7 @@ open import Data.List.Base using (List)
 open import Data.DifferenceList as DiffList using (DiffList; []; _∷_; _++_)
 open import Data.Nat.Base using (ℕ; zero; suc; _+_)
 open import Function
+open import Relation.Binary.PropositionalEquality
 
 private
   variable
@@ -37,3 +38,7 @@ toList = DiffList.toList ∘′ toDiffList
 data All {A : Set a} (P : A → Set p) : Tree A → Set (a ⊔ p) where
   leaf : All P leaf
   node : ∀ {l m r} → All P l → P m → All P r → All P (node l m r)
+
+size-map : ∀ (f : A → B) t → size (map f t) ≡ size t
+size-map f leaf         = refl
+size-map f (node l m r) = cong₂ (λ l r → l + suc r) (size-map f l) (size-map f r)
