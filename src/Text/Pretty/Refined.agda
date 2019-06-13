@@ -242,9 +242,6 @@ module layout where
     ; maxWidth  = width , ≤-refl , nothing
     } where width = length s
 
-  dot   = text "."
-  comma = text ","
-
   module flush (x : B) where
 
     height    = suc (B.height x)

@@ -1,8 +1,9 @@
 module Text.Pretty.Interface where
 
-open import Data.Nat.Base
-open import Data.List.Base
-open import Data.String.Base as String
+open import Data.Char.Base   using (Char)
+open import Data.List.Base   using (List; []; _∷_)
+open import Data.Nat.Base    using (ℕ)
+open import Data.String.Base
 
 record Layout {ℓ} (d : Set ℓ) : Set ℓ where
   infixl 4 _<>_
@@ -13,12 +14,29 @@ record Layout {ℓ} (d : Set ℓ) : Set ℓ where
         render : d → String
 
   spaces : ℕ → d
-  spaces n = text (String.replicate n ' ')
+  spaces n = text (replicate n ' ')
 
   empty : d
-  empty = spaces 0
+  empty = text ""
 
-  space = spaces 1
+  char : Char → d
+  char c = text (fromList (c ∷ []))
+
+  semi colon comma space dot : d
+  semi = char ';'; colon = char ':'
+  comma = char ','; space = char ' '; dot = char '.'
+
+  backslash forwardslash equal : d
+  backslash = char '\\'; forwardslash = char '/'; equal = char '='
+
+  squote dquote : d
+  squote = char '\''; dquote = char '"'
+
+  lparen rparen langle rangle lbrace rbrace lbracket rbracket : d
+  lparen = char '('; rparen = char ')'
+  langle = char '<'; rangle = char '>'
+  lbrace = char '{'; rbrace = char '}'
+  lbracket = char '['; rbracket = char ']'
 
   _<+>_ : d → d → d
   x <+> y = x <> space <> y
