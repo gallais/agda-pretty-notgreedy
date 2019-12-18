@@ -81,6 +81,9 @@ instance
   sized-Block : Sized Block
   sized-Block = record { size = maybe′ (suc ∘ size ∘ proj₂) 0 ∘ content }
 
+  sized-Maybe : ∀ {a} {A : Set a} → {{Sized A}} → Sized (Maybe A)
+  sized-Maybe = record { size = maybe′ size 0 }
+
 record B : Set where
   field
     height    : ℕ
@@ -120,8 +123,33 @@ module layout where
     lastWidth : ℕ
     lastWidth = (_+_ on B.lastWidth) x y
 
-    indent : String
-    indent = replicate (B.lastWidth x) ' '
+    pad : Maybe String
+    pad with B.lastWidth x
+    ... | 0 = nothing
+    ... | l = just (replicate l ' ')
+
+    size-pad : size pad ≡ B.lastWidth x
+    size-pad with B.lastWidth x
+    ... | 0         = refl
+    ... | l@(suc _) = length-replicate l
+
+    indent : Maybe String → String → String
+    indent = maybe′ _++_ id
+
+    size-indent : ∀ ma str → size (indent ma str) ≡ size ma + size str
+    size-indent nothing    str = refl
+    size-indent (just pad) str = length-++ pad str
+
+    indents : Maybe String → Tree String → Tree String
+    indents = maybe′ (Tree.map ∘ _++_) id
+
+    size-indents : ∀ ma t → size (indents ma t) ≡ size t
+    size-indents nothing    t = refl
+    size-indents (just pad) t = Treeₚ.size-map (pad ++_) t
+
+    unfold-indents : ∀ ma t → indents ma t ≡ Tree.map (indent ma) t
+    unfold-indents nothing    t = sym (Treeₚ.map-id t)
+    unfold-indents (just pad) t = refl
 
     vContent : Block × String
     vContent with B.block y .value .content
@@ -133,8 +161,8 @@ module layout where
       {-|-}                  {----------------------------------------}
       {-|-} (B.last x .value {-|-} ++ {-|-}       hd)             {-|-}
       {--------------------------}    {-|-}                       {-|-}
-      (Tree.map (indent ++_)          {-|-}       tl)          {------}
-      , indent ++                     {-|-} B.last y .value    {-|-}
+      (indents pad                    {-|-}       tl)          {------}
+      , indent pad                    {-|-} (B.last y .value)  {-|-}
                                       {----------------------------}
 
     vBlock = proj₁ vContent
@@ -158,8 +186,8 @@ module layout where
       open ≡-Reasoning
       block  = B.block x .value
       middle = B.last x .value ++ hd
-      rest   = Tree.map (indent ++_) tl
-      ∣rest∣ = Treeₚ.size-map (indent ++_) tl
+      rest   = indents pad tl
+      ∣rest∣ = size-indents pad tl
 
     block : [ xs ∈ Block ∣ ∣ xs ∣≡ height ]
     block .value = vBlock
@@ -174,9 +202,9 @@ module layout where
       length (B.last x .value) + length (B.last y .value) ≡⟨ cong₂ _+_ ∣x∣ ∣y∣ ⟩
       B.lastWidth x + B.lastWidth y ∎ where open ≡-Reasoning
     ... | [ just (hd , tl) ] = begin
-      length (indent ++ B.last y .value)       ≡⟨ length-++ indent (B.last y .value) ⟩
-      length indent + length (B.last y .value) ≡⟨ cong₂ _+_ (length-replicate (B.lastWidth x)) ∣y∣ ⟩
-      B.lastWidth x + B.lastWidth y            ∎ where
+      length (indent pad (B.last y .value)) ≡⟨ size-indent pad (B.last y .value) ⟩
+      size pad + length (B.last y .value)   ≡⟨ cong₂ _+_ size-pad ∣y∣ ⟩
+      B.lastWidth x + B.lastWidth y         ∎ where
 
       open ≡-Reasoning
 
@@ -205,7 +233,8 @@ module layout where
     isMaxWidth₂ ∣x∣≡ ∣x∣≤ ∣xs∣ (just (∣hd∣ , ∣tl∣)) | [ just (hd , tl) ] =
       All≤-the-block (≤-Block (m≤m⊔n _ _) ∣xs∣)
                      middle
-                     (TreeAll.map⁺ (indent ++_) (TreeAll.map (indented _) ∣tl∣))
+                     (subst (All≤ _) (sym $ unfold-indents pad tl)
+                     $ TreeAll.map⁺ (indent pad) (TreeAll.map (indented _) ∣tl∣))
 
       where
 
@@ -217,10 +246,10 @@ module layout where
         B.lastWidth x + B.maxWidth y .value  ≤⟨ n≤m⊔n _ _ ⟩
         vMaxWidth ∎ where open ≤-Reasoning
 
-      indented : ∀ s → ∣ s ∣≤ B.maxWidth y .value → ∣ indent ++ s ∣≤ vMaxWidth
+      indented : ∀ s → ∣ s ∣≤ B.maxWidth y .value → ∣ indent pad s ∣≤ vMaxWidth
       indented s ∣s∣ = begin
-        size (indent ++ s)                  ≡⟨ length-++ indent s ⟩
-        length indent + length s            ≡⟨ cong (_+ _) (length-replicate (B.lastWidth x)) ⟩
+        size (indent pad s)                 ≡⟨ size-indent pad s ⟩
+        size pad + length s                 ≡⟨ cong (_+ _) size-pad ⟩
         B.lastWidth x + length s            ≤⟨ +-monoʳ-≤ (B.lastWidth x) ∣s∣ ⟩
         B.lastWidth x + B.maxWidth y .value ≤⟨ n≤m⊔n (B.maxWidth x .value) _ ⟩
         vMaxWidth                           ∎ where open ≤-Reasoning
