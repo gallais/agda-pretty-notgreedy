@@ -4,7 +4,7 @@ module Text.Pretty.Refined where
 
 import Level
 
-open import Data.List.Base using (List; []; _∷_)
+open import Data.List.Base as List using (List; []; _∷_)
 open import Data.Nat.Base
 open import Data.Nat.Properties
 open import Data.Product as Product using (_×_; _,_; uncurry; proj₁; proj₂)
@@ -295,7 +295,6 @@ module layouts where
   Bs = List B
 
   open import Category.Monad
-  open import Data.List.Base
   import Data.List.Categorical as Cat
   open import Data.Bool
   open import Agda.Builtin.Nat renaming (_<_ to _<?ᵇ_)
@@ -308,17 +307,17 @@ module layouts where
 
   infixr 5 _<>_
   _<>_ : Bs → Bs → Bs
-  xs <> ys = boolFilter valid (I._<>_ <$> xs ⊛ ys)
+  xs <> ys = List.boolFilter valid (I._<>_ <$> xs ⊛ ys)
 
   text : String → Bs
-  text = boolFilter valid ∘ pure ∘ I.text
+  text = List.boolFilter valid ∘ pure ∘ I.text
 
   flush : Bs → Bs
   flush = I.flush <$>_
 
   mostFrugal : Bs → B
   mostFrugal = maybe (NE.foldr₁ (minBy B.height) ∘′ uncurry NE._∷_) I.empty
-             ∘′ uncons
+             ∘′ List.uncons
 
   render : Bs → String
   render = I.render ∘′ mostFrugal
@@ -332,7 +331,6 @@ instance
 module doc where
 
   open layouts
-  open import Data.List.Base as List
 
   _<|>_ : Bs → Bs → Bs
   x <|> y = x List.++ y

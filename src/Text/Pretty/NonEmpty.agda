@@ -6,8 +6,8 @@ open import Data.List.Base        as List
 open import Data.List.All         as All
 open import Data.List.Categorical as Cat
 open import Data.List.NonEmpty    as NE
-open import Data.Maybe.Base
-open import Data.Nat.Base
+open import Data.Maybe.Base       as Maybe
+open import Data.Nat
 open import Data.Product
 open import Data.String.Base      as String
 open import Function
@@ -26,7 +26,7 @@ module layout where
   _<>_ : L → L → L
   xs <> y ∷ ys with snocView xs
   ... | xs₀ ∷ʳ′ x =
-    let indent = Sreplicate (Slength x) ' ' in
+    let indent = String.replicate (String.length x) ' ' in
     xs₀ ++⁺ (x String.++ y) ∷ List.map (indent String.++_) ys
 
   flush : L → L
@@ -55,13 +55,13 @@ module layouts where
   flush : D → D
   flush  = List.map I.flush
 
-  visible : Decidable (All.All ((_≤ 80) ∘ Slength) ∘ NE.toList)
-  visible = All.all ((_≤? 80) ∘ Slength) ∘ NE.toList
+  visible : Decidable (All.All ((_≤ 80) ∘ String.length) ∘ NE.toList)
+  visible = All.all ((_≤? 80) ∘ String.length) ∘ NE.toList
 
   mostFrugal : D → layout.L
   mostFrugal = proj₁
              ∘′ maybe (NE.foldr₁ (minBy proj₂)) (I.empty , 0)
-             ∘′ uncons
+             ∘′ NE.fromList
              ∘′ List.map < id , NE.length >
 
   render : D → String
