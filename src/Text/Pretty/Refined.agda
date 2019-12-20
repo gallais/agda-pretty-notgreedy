@@ -1,13 +1,12 @@
-{-# OPTIONS --irrelevant-projections #-}
-
 module Text.Pretty.Refined where
 
 import Level
 
+open import Data.Erased as Erased hiding (module Erased) using (Erased)
 open import Data.List.Base as List using (List; []; _∷_)
 open import Data.Nat.Base
 open import Data.Nat.Properties
-open import Data.Product as Product using (_×_; _,_; uncurry; proj₁; proj₂)
+open import Data.Product as Prod using (_×_; _,_; uncurry; proj₁; proj₂)
 
 open import Data.Tree.Binary as Tree using (Tree; leaf; node)
 open import Data.Tree.Binary.Relation.Unary.All as TreeAll using (leaf; node)
@@ -81,7 +80,7 @@ instance
   sized-Block : Sized Block
   sized-Block = record { size = maybe′ (suc ∘ size ∘ proj₂) 0 ∘ content }
 
-  sized-Maybe : ∀ {a} {A : Set a} → {{Sized A}} → Sized (Maybe A)
+  sized-Maybe : ∀ {a} {A : Set a} → {{_ : Sized A}} → Sized (Maybe A)
   sized-Maybe = record { size = maybe′ size 0 }
 
 record B : Set where
@@ -103,7 +102,7 @@ the-block [ nothing       ] y ys = [ just (y , ys) ]
 ∣the-block∣ [ nothing       ] y ys = refl
 
 ≤-Block : ∀ {m n} {b : Block} → m ≤ n → All≤ m b → All≤ n b
-≤-Block {m} {n} m≤n = MaybeAll.map (Product.map step (TreeAll.map step)) where
+≤-Block {m} {n} m≤n = MaybeAll.map (Prod.map step (TreeAll.map step)) where
 
   step : ∀ {p} → p ≤ m → p ≤ n
   step = flip ≤-trans m≤n
@@ -191,7 +190,8 @@ module layout where
 
     block : [ xs ∈ Block ∣ ∣ xs ∣≡ height ]
     block .value = vBlock
-    block .proof = isBlock (B.block x .proof) (B.block y .proof)
+    block .proof = ⦇ isBlock (B.block x .proof) (B.block y .proof) ⦈
+      where open Erased
 
     isLastLine : ∣ B.last x .value ∣≡ B.lastWidth x →
                  ∣ B.last y .value ∣≡ B.lastWidth y →
@@ -210,7 +210,8 @@ module layout where
 
     last : [ s ∈ String ∣ ∣ s ∣≡ lastWidth ]
     last .value = vLast
-    last .proof = isLastLine (B.last x .proof) (B.last y .proof)
+    last .proof = ⦇ isLastLine (B.last x .proof) (B.last y .proof) ⦈
+      where open Erased
 
     vMaxWidth : ℕ
     vMaxWidth = B.maxWidth x .value
@@ -218,8 +219,8 @@ module layout where
 
     isMaxWidth₁ : B.lastWidth y ≤ B.maxWidth y .value →
                   lastWidth ≤ vMaxWidth
-    isMaxWidth₁ ∣y∣ = begin
-      lastWidth                           ≤⟨ +-monoʳ-≤ (B.lastWidth x) ∣y∣ ⟩
+    isMaxWidth₁ p = begin
+      lastWidth                           ≤⟨ +-monoʳ-≤ (B.lastWidth x) p ⟩
       B.lastWidth x + B.maxWidth y .value ≤⟨ n≤m⊔n _ _ ⟩
       vMaxWidth                           ∎ where open ≤-Reasoning
 
@@ -256,9 +257,14 @@ module layout where
 
     maxWidth : [ n ∈ ℕ ∣ lastWidth ≤ n × All≤ n block ]
     maxWidth .value = vMaxWidth
-    maxWidth .proof = isMaxWidth₁ (B.maxWidth y .proof .proj₁)
-                    , isMaxWidth₂ (B.last x .proof) (B.maxWidth x .proof .proj₁)
-                                  (B.maxWidth x .proof .proj₂) (B.maxWidth y .proof .proj₂)
+    maxWidth .proof =
+      ⦇ _,_ ⦇ isMaxWidth₁ (map proj₁ (B.maxWidth y .proof)) ⦈
+            ⦇ isMaxWidth₂ (B.last x .proof)
+                          (map proj₁ (B.maxWidth x .proof))
+                          (map proj₂ (B.maxWidth x .proof))
+                          (map proj₂ (B.maxWidth y .proof))
+            ⦈
+      ⦈ where open Erased
 
   infixl 4 _<>_
   _<>_ : B → B → B
@@ -267,11 +273,11 @@ module layout where
   text : String → B
   text s = record
     { height    = 0
-    ; block     = [ nothing ] , refl
+    ; block     = [ nothing ] , ⦇ refl ⦈
     ; lastWidth = width
-    ; last      = s , refl
-    ; maxWidth  = width , ≤-refl , nothing
-    } where width = length s
+    ; last      = s , ⦇ refl ⦈
+    ; maxWidth  = width , ⦇ (≤-refl , nothing) ⦈
+    } where width = length s; open Erased
 
   module flush (x : B) where
 
@@ -280,7 +286,7 @@ module layout where
     vMaxWidth = B.maxWidth x .value
 
     last : [ s ∈ String ∣ ∣ s ∣≡ lastWidth ]
-    last = "" , refl
+    last = "" , ⦇ refl ⦈ where open Erased
 
     vBlock = the-block (B.block x .value) (B.last x .value) leaf
 
@@ -293,17 +299,27 @@ module layout where
 
     block : [ xs ∈ Block ∣ ∣ xs ∣≡ height ]
     block .value = vBlock
-    block .proof = isBlock (B.block x .proof)
+    block .proof = Erased.map isBlock $ B.block x .proof
 
     maxWidth : [ n ∈ ℕ ∣ lastWidth ≤ n × All≤ n block ]
     maxWidth .value = B.maxWidth x .value
-    maxWidth .proof = z≤n , All≤-the-block (B.maxWidth x .proof .proj₂) middle leaf where
+    maxWidth .proof = map (z≤n ,_) ⦇ All≤-the-block left middle right ⦈ where
 
-      middle : ∣ B.last x .value ∣≤ vMaxWidth
-      middle = begin
-        length (B.last x .value) ≡⟨ B.last x .proof ⟩
-        x .B.lastWidth           ≤⟨ B.maxWidth x .proof .proj₁ ⟩
-        vMaxWidth                ∎ where open ≤-Reasoning
+      open Erased
+
+      left : Erased (All≤ (value (B.maxWidth x)) (B.block x))
+      left = map proj₂ (B.maxWidth x .proof)
+
+      middle : Erased (∣ B.last x .value ∣≤ vMaxWidth)
+      middle = pure (λ p q → begin
+        length (B.last x .value) ≡⟨ p ⟩
+        x .B.lastWidth           ≤⟨ q ⟩ -- B.maxWidth x .proof .proj₁ ⟩
+        vMaxWidth                ∎)
+        <*> B.last x .proof <*> (map proj₁ (B.maxWidth x .proof))
+        where open ≤-Reasoning
+
+      right : Erased (All≤ (value maxWidth) leaf)
+      right = pure leaf
 
   flush : B → B
   flush x = record { flush x }
